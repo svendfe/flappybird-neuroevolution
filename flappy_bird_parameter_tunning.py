@@ -8,9 +8,9 @@ import time
 
 # --- 1. Global Variables ---
 game = FlappyBird()
-p = PLE(game, fps=30, display_screen=False, force_fps=False)  # No display during training
+p = PLE(game, fps=30, display_screen=False, force_fps=True)  # No display during training
 p.init()
-num_solutions = 50
+num_solutions = 100
 
 # Define the Neural Network architecture
 # Inputs: 8 (player_y, player_vel, next_pipe_dist_x, next_pipe_top_y, next_pipe_bottom_y,
@@ -20,7 +20,7 @@ num_inputs = 8
 num_outputs = 1
 
 # Neural network architecture - can experiment with these
-num_neurons_hidden_layers = [16, 8]  # Two hidden layers
+num_neurons_hidden_layers = [16, 8, 4]  # Two hidden layers
 
 # --- 2. Helper Function for Input Preprocessing ---
 
@@ -137,7 +137,7 @@ def on_generation(ga_instance):
 
     # Save checkpoints every 10 generations
     if gen % 10 == 0:
-        np.save(f"checkpoint_gen_{gen}.npy", ga_instance.best_solution()[0])
+        #np.save(f"checkpoint_gen_{gen}.npy", ga_instance.best_solution())
         print(f"  → Checkpoint saved: checkpoint_gen_{gen}.npy")
 
     # Update the GANN population with the new weights from the GA
@@ -198,20 +198,20 @@ print(f"Network has {num_genes} weights (genes)")
 
 # Create the GA instance with optimized hyperparameters
 ga_instance = pygad.GA(
-    num_generations=100,
-    num_parents_mating=8,
+    num_generations=200,
+    num_parents_mating=13,
     fitness_func=fitness_func,
     sol_per_pop=num_solutions,
     num_genes=num_genes,
     initial_population=population_vectors,
     on_generation=on_generation,
     mutation_type="adaptive",
-    mutation_probability=[0.3, 0.1],
+    mutation_probability=[0.03, 0.01],
     parent_selection_type="tournament",
-    K_tournament=3,
+    K_tournament=4,
     crossover_type=blx_alpha_crossover,
     crossover_probability=0.8,
-    keep_parents=6,  # Keep more good solutions
+    keep_parents=6, 
     init_range_low=-1.0,
     init_range_high=1.0,
     save_best_solutions=True
@@ -240,47 +240,38 @@ print("Best weights saved to: best_weights.npy")
 
 # --- 8. Watch the Best Network Play ---
 
-print("\n--- Running Best Network ---")
-print("Close the game window to exit.")
+solution, best_fitness, best_idx = ga_instance.best_solution()
 
-# Re-initialize with display ON and forced FPS for smooth playback
-p = PLE(game, fps=30, display_screen=True, force_fps=True)
+game = FlappyBird()
+p = PLE(game, fps=30, display_screen=True, force_fps=False)  # No display during training
 p.init()
+# 1. Use the first network as a 'template' structure
+network = gann_instance.population_networks[0]
+
+# 2. LOAD THE GENES into the network
+update_network_weights(network, solution)
+
 p.reset_game()
+frames_lived = 0
+max_frames = 10000 
+total_distance_penalty = 0
 
-# Update the GANN instance one last time to ensure the
-# network at best_idx has the final best_solution weights
-population_matrices = pygad.gann.population_as_matrices(
-    population_networks=gann_instance.population_networks,
-    population_vectors=ga_instance.population
-)
-gann_instance.update_population_trained_weights(population_matrices)
-
-# Get the best network
-best_network = gann_instance.population_networks[best_idx]
-
-# Game loop for demonstration
-while not p.game_over():
-    # Get state
+while not p.game_over() and frames_lived < max_frames:
+    frames_lived += 1
     state = p.getGameState()
     
-    # Get normalized inputs (using our helper function)
-    inputs_np = get_network_inputs(state)
 
-    # Get prediction
-    prediction = pygad.nn.predict(last_layer=best_network,
-                                  data_inputs=inputs_np,
-                                  problem_type="regression")
+    inputs_np = get_network_inputs(state)
     
-    # Act
+    # 3. Predict using the updated network
+    prediction = pygad.nn.predict(last_layer=network,
+                                data_inputs=inputs_np,
+                                problem_type="regression")
+    
     action = None
     if prediction[0] > 0.5:
-        action = 119  # flap
-
+        action = 119 
+        
     p.act(action)
-    
-    # Small delay so we can watch it
-    time.sleep(1/30.0) 
 
-print(f"\nFinal Score of Best Network: {p.score()}")
-print("Training complete!")
+print(f"Game Over. Lasted {frames_lived} frames.")
