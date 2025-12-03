@@ -76,6 +76,8 @@ def update_network_weights(last_layer, weights_vector):
         layer.trained_weights = w_chunk.reshape(w_shape)
         
         start_idx += w_size
+
+        
 # --- 3. Fitness Function ---
 
 def fitness_func(ga_instance, solution, sol_idx):
@@ -120,6 +122,7 @@ def fitness_func(ga_instance, solution, sol_idx):
     fitness = ((score + 5) * 1000) + (frames_lived) - (avg_distance * 1.5)
     
     return max(0, fitness)
+
 # --- 4. Generation Callback ---
 
 def on_generation(ga_instance):
@@ -137,7 +140,7 @@ def on_generation(ga_instance):
 
     # Save checkpoints every 10 generations
     if gen % 10 == 0:
-        #np.save(f"checkpoint_gen_{gen}.npy", ga_instance.best_solution())
+        np.save(f"checkpoint_gen_{gen}.npy", ga_instance.best_solution())
         print(f"  → Checkpoint saved: checkpoint_gen_{gen}.npy")
 
     # Update the GANN population with the new weights from the GA
